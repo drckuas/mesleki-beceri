@@ -16,19 +16,26 @@
   function esc(t) { return String(t === null || t === undefined ? "" : t).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
   function bar(p, ok) { return '<div class="bar' + (ok ? " ok" : "") + '"><i style="width:' + Math.max(0, Math.min(100, Math.round(p))) + '%"></i></div>'; }
 
-  /** Çok basit biçimlendirme: # başlık, ## alt başlık, - madde, **kalın** */
+  /** Çok basit biçimlendirme: # başlık, ## alt başlık, - madde, 1. numaralı madde, **kalın** */
   function md(text) {
-    var lines = String(text || "").split(/\r?\n/), out = [], inList = false;
+    var lines = String(text || "").split(/\r?\n/), out = [], list = "";
     function inline(s) { return esc(s).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>"); }
+    function close() { if (list) { out.push("</" + list + ">"); list = ""; } }
     lines.forEach(function (ln) {
       var t = ln.trim(), m;
-      if (/^[-•*]\s+/.test(t)) { if (!inList) { out.push("<ul>"); inList = true; } out.push("<li>" + inline(t.replace(/^[-•*]\s+/, "")) + "</li>"); return; }
-      if (inList) { out.push("</ul>"); inList = false; }
+      if ((m = t.match(/^[-•*]\s+(.*)$/))) { if (list !== "ul") { close(); out.push("<ul>"); list = "ul"; } out.push("<li>" + inline(m[1]) + "</li>"); return; }
+      if ((m = t.match(/^\d+[.)]\s+(.*)$/))) { if (list !== "ol") { close(); out.push("<ol start=\"" + m[0].match(/^\d+/)[0] + "\">"); list = "ol"; } out.push("<li>" + inline(m[1]) + "</li>"); return; }
+      close();
       if ((m = t.match(/^(#{1,2})\s+(.*)$/))) out.push("<h" + m[1].length + ">" + inline(m[2]) + "</h" + m[1].length + ">");
       else if (t) out.push("<p>" + inline(t) + "</p>");
     });
-    if (inList) out.push("</ul>");
+    close();
     return out.join("");
+  }
+  /** Görsel listesi: her satır bir adres (img/dosya.jpg veya https://...) */
+  function imgs(text) {
+    return String(text || "").split(/\r?\n/).map(function (x) { return x.trim(); })
+      .filter(function (x) { return /^(img\/[\w.\-]+|https?:\/\/\S+)\.(jpe?g|png|webp|gif)(\?\S*)?$/i.test(x); });
   }
   function parseVideo(u) {
     u = String(u || "").trim();
@@ -53,7 +60,7 @@
       seconds: function () { return watched; }
     };
   }
-  window.__MB = { makeTracker: makeTracker, parseVideo: parseVideo, md: md };
+  window.__MB = { makeTracker: makeTracker, parseVideo: parseVideo, md: md, imgs: imgs };
 
   /* ---------- Sunucu çağrıları ---------- */
   function api(action, data) {
@@ -194,12 +201,12 @@
   });
 
   /* ---------- Pratik sayfası ---------- */
-  var IC = { metin: "📖", video: "🎬", dosya: "📎" };
+  var IC = { metin: "📖", video: "🎬", dosya: "📎", resim: "🖼️" };
   route(/^\/p\/([\w-]+)$/, function (id) {
     return getPratik(id, true).then(function (d) {
       var p = d.pratik, h = '<div class="card"><h3>' + esc(p.ad) + '</h3><p class="mute" style="margin:0">' + esc(p.aciklama) + '</p>' + (p.tarih ? '<p class="mute" style="margin:6px 0 0">' + esc(p.tarih) + '</p>' : "") + '</div>';
       d.icerik.forEach(function (c) {
-        h += '<a class="step" href="#/p/' + esc(id) + '/c/' + c.sira + '"><span class="ic">' + (IC[c.tur] || "📄") + '</span><span class="tx"><b>' + esc(c.baslik) + '</b><small>' + ({ metin: "Okuma", video: "Video", dosya: "Dosya" }[c.tur] || "İçerik") + '</small></span><span class="st">' + (c.tamam ? "✅" : "▫️") + '</span></a>';
+        h += '<a class="step" href="#/p/' + esc(id) + '/c/' + c.sira + '"><span class="ic">' + (IC[c.tur] || "📄") + '</span><span class="tx"><b>' + esc(c.baslik) + '</b><small>' + ({ metin: "Okuma", video: "Video", dosya: "Dosya", resim: "Ders notu sayfaları" }[c.tur] || "İçerik") + '</small></span><span class="st">' + (c.tamam ? "✅" : "▫️") + '</span></a>';
       });
       if (d.soruSayisi > 0) {
         var kilit = !d.testAcik;
@@ -286,6 +293,12 @@
         var words = c.icerik.split(/\s+/).length, sn = Math.max(CFG.METIN_MIN_SN || 8, Math.min(45, Math.round(words / 8)));
         body = '<div class="card txt">' + md(c.icerik) + '</div>';
         setup = function () { return timedComplete(document.getElementById("done"), sn, "Okuyun"); };
+      } else if (c.tur === "resim") {
+        var im = imgs(c.icerik), snR = Math.min(60, 10 + 4 * im.length);
+        body = im.length
+          ? '<p class="mute">Sayfalara dokunarak büyütebilirsiniz.</p>' + im.map(function (u) { return '<a href="' + esc((window.__DEMO_IMG && window.__DEMO_IMG[u]) || u) + '" target="_blank" rel="noopener"><img class="pg" loading="lazy" src="' + esc((window.__DEMO_IMG && window.__DEMO_IMG[u]) || u) + '" alt="Ders notu sayfası"></a>'; }).join("")
+          : '<div class="card">Görsel bulunamadı.</div>';
+        setup = function () { return timedComplete(document.getElementById("done"), snR, "İnceleyin"); };
       } else if (c.tur === "dosya") {
         var v0 = parseVideo(c.icerik);
         body = '<div class="card"><h3>' + esc(c.baslik) + '</h3>' + (v0.t === "link" || v0.t === "drive" ? '<a class="ghost" target="_blank" rel="noopener" href="' + esc(v0.url || ("https://drive.google.com/file/d/" + v0.id + "/view")) + '">Dosyayı aç ↗</a>' : '<p class="mute">Dosya bağlantısı eklenmemiş.</p>') + '</div>';

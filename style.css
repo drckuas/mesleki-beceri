@@ -79,3 +79,6 @@ button.ghost,a.ghost{display:block;width:100%;text-align:center;text-decoration:
 .pass .nm{font-size:22px;font-weight:700}
 .pass .clock{font-size:32px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:10px}
 .spin{text-align:center;padding:50px 0;color:var(--mute)}
+
+.txt ol{padding-left:24px;margin:4px 0 10px}
+img.pg{width:100%;height:auto;border:1px solid var(--line);border-radius:8px;margin:0 0 10px;background:#fff;display:block}
