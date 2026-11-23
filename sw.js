@@ -1,5 +1,5 @@
 /* Uygulama kabuğunu önbelleğe alır. İçerik/kod değiştirince VERSION'ı artırın. */
-const VERSION = "mb-v1";
+const VERSION = "mb-v2";
 const FILES = ["./", "index.html", "style.css", "config.js", "app.js", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png"];
 
 self.addEventListener("install", (e) => {
